@@ -3,15 +3,13 @@
 #include <functional>
 #include <ostream>
 
-#ifdef __linux__
 #include <netinet/ip.h>
-#endif
 
 namespace http {
 
 class ip {
   public:
-	ip();
+	ip(uint32_t);
 
 	friend std::ostream &operator<<(std::ostream &, const ip &);
 
@@ -42,12 +40,12 @@ enum class content_type {
 
 class request {
   public:
-	request(int clientfd, method method, url url);
+	request(int clientfd, ::http::method method, const ::http::url &url);
 
 	bool respond_string(int code, content_type content_type, const std::string &body);
 
-	const method method;
-	const url &url;
+	const ::http::method method;
+	const ::http::url &url;
 
   private:
 	int _clientfd;
@@ -60,13 +58,12 @@ class host {
 		local,
 	};
 
-	constexpr host(type);
-
-	ip getIP();
+	constexpr host(type type) : _type(type) {}
 
 	friend std::ostream &operator<<(std::ostream &, const host &);
 
   private:
+	ip getIP() const;
 	type _type;
 };
 
@@ -80,12 +77,10 @@ class server {
 				std::function<void(const std::string &)> errorCallback);
 
   private:
-#ifdef __linux__
 	int _sockfd;
 	sockaddr_in _serveraddr;
-#endif
 
-	requestCallbackType _requestListener, _dispatchInternalServerError;
+	const requestCallbackType _requestListener, _dispatchInternalServerError;
 };
 
 } // namespace http
