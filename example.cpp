@@ -11,7 +11,7 @@ bool dispatchInternalServerError(http::request &req) {
 }
 
 int main(int argc, char const *argv[]) {
-	uint16_t port = 80;
+	uint16_t port = argc > 1 ? atoi(argv[1]) : 80;
 	http::host host = http::host::local; // == 127.0.0.1, note http::host::any == 0.0.0.0
 
 	http::server server(requestListener, dispatchInternalServerError);
