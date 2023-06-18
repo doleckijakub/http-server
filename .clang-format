@@ -1,0 +1,8 @@
+Language: Cpp
+BasedOnStyle: LLVM
+ColumnLimit: 120
+UseTab: Always
+IndentWidth: 4
+TabWidth: 4
+IndentCaseLabels: true
+AllowShortLambdasOnASingleLine: false
