@@ -38,7 +38,7 @@ ip::ip(uint32_t full) : _full(full) {}
 url::url(std::string href) : _href(std::move(href)) {}
 
 request::request(int clientfd, ::http::method method, const ::http::url &url)
-	: _clientfd(clientfd), method(method), url(url) {}
+	: method(method), url(url), _clientfd(clientfd) {}
 
 std::string response(int code, content_type content_type, const std::string &body) {
 	// clang-format off
@@ -62,6 +62,8 @@ ip host::getIP() const {
 			return ip(inet_addr("0.0.0.0"));
 		case local:
 			return ip(inet_addr("127.0.0.1"));
+		default:
+			throw "unreachable"s;
 	}
 }
 
@@ -81,7 +83,7 @@ void server::listen(host host, uint16_t port, std::function<void()> successCallb
 
 		_serveraddr.sin_family = AF_INET;
 		_serveraddr.sin_port = htons(port);
-		_serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
+		_serveraddr.sin_addr.s_addr = host.getIP()._full;
 
 		validate(bind(_sockfd, (sockaddr *)&_serveraddr, sizeof(_serveraddr)));
 
@@ -110,6 +112,8 @@ void handleRequest(int clientfd, server::requestCallbackType requestListener,
 	try {
 		std::string buffer(256, '\0');
 		ssize_t n = validate(recv(clientfd, buffer.data(), buffer.size(), 0));
+
+		(void)n; // TODO allow messages longer than 256 bytes
 
 		std::string res;
 

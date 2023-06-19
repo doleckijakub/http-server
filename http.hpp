@@ -13,6 +13,8 @@ class ip {
 
 	friend std::ostream &operator<<(std::ostream &, const ip &);
 
+	friend class server;
+
   private:
 	union {
 		uint8_t _octets[4];
@@ -61,6 +63,8 @@ class host {
 	constexpr host(type type) : _type(type) {}
 
 	friend std::ostream &operator<<(std::ostream &, const host &);
+
+	friend class server;
 
   private:
 	ip getIP() const;
