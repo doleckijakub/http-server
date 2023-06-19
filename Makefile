@@ -3,7 +3,7 @@ CXX ?= g++
 default: build/example
 
 CPPFLAGS :=
-CXXFLAGS := -Wall -Wextra -pedantic -O2
+CXXFLAGS := -Wall -Wextra -Wswitch-enum -pedantic -O2
 LDFLAGS :=
 
 build/example: example.cpp build/http.o
