@@ -77,7 +77,7 @@ class server {
 
 	server(requestCallbackType requestListener, requestCallbackType dispatchInternalServerError);
 
-	void listen(host host, uint16_t port, std::function<void()> successCallback,
+	void listen(const host &host, uint16_t port, std::function<void()> successCallback,
 				std::function<void(const std::string &)> errorCallback);
 
   private:

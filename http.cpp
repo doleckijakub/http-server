@@ -76,7 +76,7 @@ template <typename T> T validate(T code) {
 	return code;
 }
 
-void server::listen(host host, uint16_t port, std::function<void()> successCallback,
+void server::listen(const host &host, uint16_t port, std::function<void()> successCallback,
 					std::function<void(const std::string &)> errorCallback) {
 	try {
 		_sockfd = validate(socket(PF_INET, SOCK_STREAM, IPPROTO_TCP));
