@@ -25,7 +25,8 @@ int main(int argc, char const *argv[]) {
 
 	http::server server(requestListener, dispatchInternalServerError);
 
-	std::signal(SIGINT, http::server::stopAllInstances);
+	for (const auto &sig : {SIGINT, SIGTERM, SIGQUIT, SIGILL, SIGABRT, SIGFPE, SIGSEGV, SIGBUS, SIGSYS, SIGPIPE})
+		std::signal(sig, http::server::stopAllInstances);
 
 	server.listen(
 		host, port,
