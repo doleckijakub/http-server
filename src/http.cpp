@@ -99,6 +99,8 @@ ip host::getIP() const {
 	}
 }
 
+std::unordered_map<server *, std::pair<host, uint16_t>> server::_instances;
+
 server::server(requestCallbackType requestListener, requestCallbackType dispatchInternalServerError)
 	: _requestListener(requestListener), _dispatchInternalServerError(dispatchInternalServerError) {}
 
@@ -108,8 +110,21 @@ template <typename T> T validate(T code) {
 	return code;
 }
 
+void server::stopAllInstances(int) {
+	for (const auto &[instance, ip] : _instances) {
+		::http::log("Stopping ", ip.first, ":", ip.second, "... ",
+					(instance->stop() ? "done"s : "failed: "s + std::string(std::strerror(errno))));
+	}
+
+	std::exit(0);
+}
+
+bool server::stop() { return close(_sockfd) == 0; }
+
 void server::listen(const host &host, uint16_t port, std::function<void()> successCallback,
 					std::function<void(const std::string &)> errorCallback) {
+	_instances.insert_or_assign(this, std::make_pair(host, port));
+
 	try {
 		_sockfd = validate(socket(PF_INET, SOCK_STREAM, IPPROTO_TCP));
 

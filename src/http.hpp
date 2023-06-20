@@ -119,9 +119,15 @@ class server {
 	void listen(const host &host, uint16_t port, std::function<void()> successCallback,
 				std::function<void(const std::string &)> errorCallback);
 
+	static void stopAllInstances(int);
+
+	bool stop();
+
   private:
 	int _sockfd;
 	sockaddr_in _serveraddr;
+
+	static std::unordered_map<server *, std::pair<host, uint16_t>> _instances;
 
 	const requestCallbackType _requestListener, _dispatchInternalServerError;
 };

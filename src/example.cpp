@@ -1,4 +1,5 @@
 #include <iostream>
+#include <csignal>
 
 #include "http.hpp"
 
@@ -23,6 +24,8 @@ int main(int argc, char const *argv[]) {
 	http::host host = http::host::local; // == 127.0.0.1, note http::host::any == 0.0.0.0
 
 	http::server server(requestListener, dispatchInternalServerError);
+
+	std::signal(SIGINT, http::server::stopAllInstances);
 
 	server.listen(
 		host, port,
