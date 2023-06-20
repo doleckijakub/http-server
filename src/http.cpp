@@ -28,13 +28,13 @@ template <typename Arg, typename... Args> static void error(Arg &&arg, Args &&..
 }
 
 template <typename Arg, typename... Args> static void log(Arg &&arg, Args &&...args) {
-	std::cerr << std::forward<Arg>(arg);
-	((std::cerr << std::forward<Args>(args)), ...);
-	std::cerr << std::endl;
+	std::cout << std::forward<Arg>(arg);
+	((std::cout << std::forward<Args>(args)), ...);
+	std::cout << std::endl;
 }
 
-void handleRequest(int clientfd, server::requestCallbackType requestListener,
-				   server::requestCallbackType dispatchInternalServerError);
+static void handleRequest(int clientfd, server::requestCallbackType requestListener,
+						  server::requestErrorCallbackType dispatchInternalServerError);
 
 exception::exception(int code, std::string message) : code(code), message(message) {}
 
@@ -101,8 +101,8 @@ ip host::getIP() const {
 
 std::unordered_map<server *, std::pair<host, uint16_t>> server::_instances;
 
-server::server(requestCallbackType requestListener, requestCallbackType dispatchInternalServerError)
-	: _requestListener(requestListener), _dispatchInternalServerError(dispatchInternalServerError) {}
+server::server(requestCallbackType requestListener, requestErrorCallbackType dispatchError)
+	: _requestListener(requestListener), _dispatchError(dispatchError) {}
 
 template <typename T> T validate(T code) {
 	if (code < 0)
@@ -111,6 +111,8 @@ template <typename T> T validate(T code) {
 }
 
 void server::stopAllInstances(int) {
+	std::putc('\n', stdout);
+
 	for (const auto &[instance, ip] : _instances) {
 		::http::log("Stopping ", ip.first, ":", ip.second, "... ",
 					(instance->stop() ? "done"s : "failed: "s + std::string(std::strerror(errno))));
@@ -150,12 +152,12 @@ void server::listen(const host &host, uint16_t port, std::function<void()> succe
 	while (true) {
 		int clientfd = accept(_sockfd, (sockaddr *)&clientaddr, &clientsize);
 		inet_ntop(clientaddr.ss_family, (void *)&((sockaddr_in *)&clientaddr)->sin_addr, clientip, sizeof(clientip));
-		handleRequest(clientfd, _requestListener, _dispatchInternalServerError);
+		handleRequest(clientfd, _requestListener, _dispatchError);
 	}
 }
 
-void handleRequest(int clientfd, server::requestCallbackType requestListener,
-				   server::requestCallbackType dispatchInternalServerError) {
+static void handleRequest(int clientfd, server::requestCallbackType requestListener,
+						  server::requestErrorCallbackType dispatchError) {
 
 	const auto startTime = std::chrono::high_resolution_clock::now();
 
@@ -170,6 +172,15 @@ void handleRequest(int clientfd, server::requestCallbackType requestListener,
 		error.message = message;
 	};
 
+	auto panic = [&](const std::string message) {
+		error.code = -1;
+		error.message = message + ": "s + std::strerror(errno);
+	};
+
+	auto panic_errno = [&](const std::string message) {
+		panic(message + ": "s + std::strerror(errno));
+	};
+
 	{ // recieve request
 		constexpr int BUFFER_SIZE = 256;
 		char buffer[BUFFER_SIZE];
@@ -180,8 +191,8 @@ void handleRequest(int clientfd, server::requestCallbackType requestListener,
 		while ((pos = requestStr.find(delimiter)) == std::string::npos) {
 			int bytesread = recv(clientfd, buffer, BUFFER_SIZE - 1, 0);
 			if (bytesread <= 0) {
-				::http::error("recv() failed: ", std::strerror(errno));
-				return;
+				panic_errno("Failed to recieve message from socket");
+				break;
 			}
 
 			buffer[bytesread] = '\0';
@@ -270,13 +281,13 @@ void handleRequest(int clientfd, server::requestCallbackType requestListener,
 				try {
 					auto lenstr = requestElements.headers.at("Content-Length");
 					auto len = stoi(lenstr);
-					if (requestElements.headers.at("Content-Type") == "application/x-www-form-urlencoded") {
+					auto contentType = requestElements.headers.at("Content-Type");
+					if (contentType == "application/x-www-form-urlencoded") {
 						std::string payload(len + 1, '\0');
 
 						int bytesread = recv(clientfd, payload.data(), len, 0);
 						if (bytesread <= 0) {
-							::http::error("recv() failed: ", std::strerror(errno));
-							return;
+							panic_errno("Failed to recieve message from socket");
 						}
 
 						std::istringstream payloadStream(payload);
@@ -289,10 +300,10 @@ void handleRequest(int clientfd, server::requestCallbackType requestListener,
 							requestElements.payload[key] = value;
 						}
 					} else {
-						::http::error("incorrent content type: ");
+						set_error(501, "Parsing '"s + contentType + "' payloads not implemented by this server"s);
 					}
 				} catch (const std::exception &e) {
-					::http::error("exception caught: ", e.what());
+					set_error(400, "Bad request");
 				}
 			}
 		}
@@ -316,18 +327,17 @@ void handleRequest(int clientfd, server::requestCallbackType requestListener,
 
 		req = std::make_shared<request>(clientfd, req_method, requestElements.url);
 
-		try {
+		if (error.code > 0) {
+			dispatchError(*req, error.code, error.message);
+		} else if (error.code != -1) {
 			if (!requestListener(*req))
-				throw "Request failed: "s + std::string(std::strerror(errno));
-		} catch (const std::exception &err) {
-			dispatchInternalServerError(*req);
+				dispatchError(*req, 500, "Something went wrong");
 		}
 	}
 
 	{ // close
 		if (close(clientfd) < 0) {
-			::http::error("close() returned: ", std::strerror(errno));
-			return;
+			panic_errno("Failed to close the socket");
 		}
 	}
 
@@ -366,17 +376,21 @@ void handleRequest(int clientfd, server::requestCallbackType requestListener,
 		}
 	};
 
-	::http::log(														   // log message
-		requestElements.getHeader("X-Forwarded-For"), "/",				   // IP/
-		requestElements.getHeader("Cf-Ipcountry"), " ",					   // COUNTRY
-		std::quoted(requestElements.getPlatform()), " ",				   // "PLATFORM"
-		requestElements.method, " ",									   // METHOD
-		requestElements.getHeader("Host"), " ",							   // HOST
-		requestElements.url, " ",										   // PATH
-		req->response().status(), " ",									   // CODE
-		(error.code ? error.message : formatSize(req->response().size())), // SIZE or ERROR
-		":",															   //
-		executionTime()													   // EXECUTION TIME
+	const static auto responseOrError = [&]() -> std::string {
+		if (error.code == -1)
+			return error.message;
+		return std::to_string(req->response().status()) + " "s + formatSize(req->response().size());
+	};
+
+	::http::log(										   // log message
+		requestElements.getHeader("X-Forwarded-For"), "/", // IP/
+		requestElements.getHeader("Cf-Ipcountry"), " ",	   // COUNTRY
+		std::quoted(requestElements.getPlatform()), " ",   // "PLATFORM"
+		requestElements.method, " ",					   // METHOD
+		requestElements.getHeader("Host"), " ",			   // HOST
+		requestElements.url, " ",						   // PATH
+		responseOrError(), " ",							   // RESPONSE (CODE AND SIZE) or ERROR
+		executionTime()									   // EXECUTION TIME
 	);
 }
 

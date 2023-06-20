@@ -113,8 +113,9 @@ class host {
 class server {
   public:
 	using requestCallbackType = std::function<bool(request &)>;
+	using requestErrorCallbackType = std::function<bool(request &, int, const std::string &)>;
 
-	server(requestCallbackType requestListener, requestCallbackType dispatchInternalServerError);
+	server(requestCallbackType requestListener, requestErrorCallbackType dispatchError);
 
 	void listen(const host &host, uint16_t port, std::function<void()> successCallback,
 				std::function<void(const std::string &)> errorCallback);
@@ -129,7 +130,8 @@ class server {
 
 	static std::unordered_map<server *, std::pair<host, uint16_t>> _instances;
 
-	const requestCallbackType _requestListener, _dispatchInternalServerError;
+	const requestCallbackType _requestListener;
+	const requestErrorCallbackType _dispatchError;
 };
 
 } // namespace http
