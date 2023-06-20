@@ -22,13 +22,12 @@ void handleRequest(int clientfd, server::requestCallbackType requestListener,
 				   server::requestCallbackType dispatchInternalServerError);
 
 std::ostream &operator<<(std::ostream &out, const ip &ip) {
-	// clang-format off
-	return out
-		<< (int) ip._octets[0] << "."
-		<< (int) ip._octets[1] << "."
-		<< (int) ip._octets[2] << "."
-		<< (int) ip._octets[3];
-	// clang-format on
+	out << (int)ip._octets[0] << ".";
+	out << (int)ip._octets[1] << ".";
+	out << (int)ip._octets[2] << ".";
+	out << (int)ip._octets[3];
+
+	return out;
 }
 
 std::ostream &operator<<(std::ostream &out, const host &host) { return out << host.getIP(); }
@@ -41,14 +40,9 @@ request::request(int clientfd, ::http::method method, const ::http::url &url)
 	: method(method), url(url), _clientfd(clientfd) {}
 
 std::string response(int code, content_type content_type, const std::string &body) {
-	// clang-format off
-	return
-		"HTTP/1.1 "s + httpStatusCodeToString(code) + "\r\n"s +
-		"Content-Type: "s + httpContentTypeToString(content_type) + "\r\n"s +
-		"Content-Length: "s + std::to_string(body.size()) + "\r\n" +
-		"\r\n"s +
-		body;
-	// clang-format on
+	return "HTTP/1.1 "s + httpStatusCodeToString(code) + "\r\n"s + "Content-Type: "s +
+		   httpContentTypeToString(content_type) + "\r\n"s + "Content-Length: "s + std::to_string(body.size()) +
+		   "\r\n"s + "\r\n"s + body;
 }
 
 bool request::respond_string(int code, content_type content_type, const std::string &body) {
