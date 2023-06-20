@@ -37,16 +37,33 @@ ip::ip(uint32_t full) : _full(full) {}
 url::url(std::string href) : _href(std::move(href)) {}
 
 request::request(int clientfd, ::http::method method, const ::http::url &url)
-	: method(method), url(url), _clientfd(clientfd) {}
+	: method(method), url(url), _response(clientfd) {}
 
-std::string response(int code, content_type content_type, const std::string &body) {
-	return "HTTP/1.1 "s + httpStatusCodeToString(code) + "\r\n"s + "Content-Type: "s +
-		   httpContentTypeToString(content_type) + "\r\n"s + "Content-Length: "s + std::to_string(body.size()) +
-		   "\r\n"s + "\r\n"s + body;
-}
+response &request::response() { return _response; }
 
-bool request::respond_string(int code, content_type content_type, const std::string &body) {
-	std::string res = response(code, content_type, body);
+response::response(int clientfd) : _clientfd(clientfd) {}
+
+response::~response() { send(); }
+
+void response::setStatus(int status) { _status = status; }
+
+void response::setHeader(const std::string &key, const std::string &value) { _headers[key] = value; }
+
+void response::setContentType(const http::content_type content_type) { _content_type = content_type; }
+
+void response::setContentString(const std::string &content) { _content = content; }
+
+bool response::send() {
+	std::string res;
+
+	res += "HTTP/1.1 "s + httpStatusCodeToString(_status) + "\r\n"s;
+	for (auto &[k, v] : _headers)
+		res += k + ": " + v + "\r\n"s;
+	res += "Content-Type: "s + httpContentTypeToString(_content_type) + "\r\n"s;
+	res += "Content-Length: "s + std::to_string(_content.size()) + "\r\n"s;
+	res += "\r\n"s;
+	res += _content;
+
 	return write(_clientfd, res.data(), res.length()) >= 0;
 }
 

@@ -40,17 +40,39 @@ enum class content_type {
 	TEXT_PLAIN,
 };
 
-class request {
+class response {
   public:
-	request(int clientfd, ::http::method method, const ::http::url &url);
+	void setStatus(int status);
+	void setHeader(const std::string &key, const std::string &value);
+	void setContentType(const http::content_type content_type);
+	void setContentString(const std::string &content);
+	bool send();
 
-	bool respond_string(int code, content_type content_type, const std::string &body);
+	~response();
+
+	friend class request;
+
+  private:
+	response(int clientfd);
+
+	const int _clientfd;
+
+	int _status = 200;
+	std::unordered_map<std::string, std::string> _headers;
+	http::content_type _content_type = http::content_type::TEXT_PLAIN;
+	std::string _content;
+};
+
+struct request {
+	request(int clientfd, ::http::method method, const ::http::url &url);
 
 	const ::http::method method;
 	const ::http::url &url;
 
+	::http::response &response();
+
   private:
-	int _clientfd;
+	::http::response _response;
 };
 
 class host {

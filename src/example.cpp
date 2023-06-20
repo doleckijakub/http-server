@@ -3,11 +3,19 @@
 #include "http.hpp"
 
 bool requestListener(http::request &req) {
-	return req.respond_string(200, http::content_type::TEXT_PLAIN, "Hello, World!");
+	req.response().setStatus(200);
+	req.response().setContentType(http::content_type::TEXT_PLAIN);
+
+	req.response().setContentString("Hello, World!");
+	return req.response().send();
 }
 
 bool dispatchInternalServerError(http::request &req) {
-	return req.respond_string(500, http::content_type::TEXT_PLAIN, "500 Internal server error");
+	req.response().setStatus(500);
+	req.response().setContentType(http::content_type::TEXT_PLAIN);
+
+	req.response().setContentString("500 Internal server error");
+	return req.response().send();
 }
 
 int main(int argc, char const *argv[]) {
