@@ -7,6 +7,12 @@
 
 namespace http {
 
+struct exception {
+	const int code;
+	const std::string message;
+	exception(int code, std::string message);
+};
+
 class ip {
   public:
 	ip(uint32_t);
@@ -31,8 +37,16 @@ class url {
 };
 
 enum class method {
+	UNKNOWN,
 	GET,
+	HEAD,
 	POST,
+	PUT,
+	DELETE,
+	CONNECT,
+	OPTIONS,
+	TRACE,
+	PATCH,
 };
 
 enum class content_type {
@@ -51,6 +65,9 @@ class response {
 	~response();
 
 	friend class request;
+
+	int status();
+	size_t size();
 
   private:
 	response(int clientfd);

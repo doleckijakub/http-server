@@ -10,6 +10,9 @@
 
 #include <iostream>
 #include <sstream>
+#include <stdexcept>
+
+#include <memory>
 
 using namespace std::string_literals;
 
@@ -18,8 +21,22 @@ std::string httpContentTypeToString(http::content_type type);
 
 namespace http {
 
+template <typename Arg, typename... Args> static void error(Arg &&arg, Args &&...args) {
+	std::cerr << std::forward<Arg>(arg);
+	((std::cerr << std::forward<Args>(args)), ...);
+	std::cerr << std::endl;
+}
+
+template <typename Arg, typename... Args> static void log(Arg &&arg, Args &&...args) {
+	std::cerr << std::forward<Arg>(arg);
+	((std::cerr << std::forward<Args>(args)), ...);
+	std::cerr << std::endl;
+}
+
 void handleRequest(int clientfd, server::requestCallbackType requestListener,
 				   server::requestCallbackType dispatchInternalServerError);
+
+exception::exception(int code, std::string message) : code(code), message(message) {}
 
 std::ostream &operator<<(std::ostream &out, const ip &ip) {
 	out << (int)ip._octets[0] << ".";
@@ -44,6 +61,10 @@ response &request::response() { return _response; }
 response::response(int clientfd) : _clientfd(clientfd) {}
 
 response::~response() { send(); }
+
+int response::status() { return _status; }
+
+size_t response::size() { return _content.length(); }
 
 void response::setStatus(int status) { _status = status; }
 
@@ -120,60 +141,183 @@ void server::listen(const host &host, uint16_t port, std::function<void()> succe
 
 void handleRequest(int clientfd, server::requestCallbackType requestListener,
 				   server::requestCallbackType dispatchInternalServerError) {
-	try {
-		std::string buffer(256, '\0');
-		ssize_t n = validate(recv(clientfd, buffer.data(), buffer.size(), 0));
 
-		(void)n; // TODO allow messages longer than 256 bytes
+	std::string requestStr;
+	struct {
+		int code = 0;
+		std::string message;
+	} error;
 
-		std::string res;
+	auto set_error = [&](const int code, const std::string message) {
+		error.code = code;
+		error.message = message;
+	};
 
-		std::istringstream iss(buffer);
-		struct {
-			std::string method, uri, protocolVersion;
-		} reqParams;
+	{ // recieve request
+		constexpr int BUFFER_SIZE = 256;
+		char buffer[BUFFER_SIZE];
 
-		iss >> reqParams.method >> reqParams.uri >> reqParams.protocolVersion;
+		std::string delimiter = "\r\n\r\n";
+		size_t pos = std::string::npos;
 
-		method req_method;
+		while ((pos = requestStr.find(delimiter)) == std::string::npos) {
+			int bytesread = recv(clientfd, buffer, BUFFER_SIZE - 1, 0);
+			if (bytesread <= 0) {
+				::http::error("recv() failed: ", std::strerror(errno));
+				return;
+			}
 
-		if (reqParams.method == "GET")
-			req_method = method::GET;
-		else if (reqParams.method == "POST")
-			req_method = method::POST;
-		else
-			throw std::string("Unknown method: ") + reqParams.method;
+			buffer[bytesread] = '\0';
+			requestStr += buffer;
+		}
+	}
 
-		url req_url(reqParams.uri);
+	struct {
+		std::string method, url, protocolVersion;
+		std::unordered_map<std::string, std::string> headers;
+		std::unordered_map<std::string, std::string> payload; // POST-only
 
-		// clang-format off
-		std::cout
-			<< reqParams.method << " "
-			<< reqParams.uri << " "
-			<< reqParams.protocolVersion << std::endl;
-		// clang-format on
+		const std::string getHeader(const std::string &key) {
+			try {
+				return headers.at(key);
+			} catch (const std::exception &e) {
+				return "_";
+			}
+		}
+	} requestElements;
 
-		request req(clientfd, req_method, req_url);
+	{ // parse request
+		std::istringstream requestStream(requestStr);
 
-		try {
-			if (!requestListener(req))
-				throw "Request failed: "s + std::string(std::strerror(errno));
-		} catch (const std::string &error) {
-			dispatchInternalServerError(req);
-			return;
+		std::string line;
+
+		{ // parse request line
+			std::getline(requestStream, line);
+			std::istringstream requestLineStream(line);
+			requestLineStream >> requestElements.method;
+			requestLineStream >> requestElements.url;
+			requestLineStream >> requestElements.protocolVersion;
 		}
 
-		std::cout << reqParams.uri << " : OK" << std::endl; // TODO: refactor
+		{ // parse headers
+			std::string header;
+			while (std::getline(requestStream, line) && line != "\r") {
+				std::istringstream headerStream(line);
+				std::getline(headerStream, header, ':');
+				std::string value;
+				std::getline(headerStream, value);
+				value.erase(0, value.find_first_not_of(' '));
+				if (value[value.length() - 1] == '\r')
+					value.pop_back();
+				requestElements.headers[header] = value;
+			}
+		}
 
-		validate(close(clientfd));
-		clientfd = -1;
+		{ // parse payload
+			if (requestElements.method == "POST") {
+				try {
+					auto lenstr = requestElements.headers.at("Content-Length");
+					auto len = stoi(lenstr);
+					if (requestElements.headers.at("Content-Type") == "application/x-www-form-urlencoded") {
+						std::string payload(len + 1, '\0');
 
-	} catch (const std::string &error) {
-		// recv or close failed
+						int bytesread = recv(clientfd, payload.data(), len, 0);
+						if (bytesread <= 0) {
+							::http::error("recv() failed: ", std::strerror(errno));
+							return;
+						}
+
+						std::istringstream payloadStream(payload);
+						std::string data;
+						while (std::getline(payloadStream, data, '&')) {
+							std::string key, value;
+							std::istringstream dataStream(data);
+							std::getline(dataStream, key, '=');
+							std::getline(dataStream, value);
+							requestElements.payload[key] = value;
+						}
+					} else {
+						::http::error("incorrent content type: ");
+					}
+				} catch (const std::exception &e) {
+					::http::error("exception caught: ", e.what());
+				}
+			}
+		}
 	}
+
+	method req_method = method::UNKNOWN;
+	std::shared_ptr<request> req;
+
+	{
+		static std::unordered_map<std::string, method> methodMap = {
+			{"GET", method::GET},		  {"HEAD", method::HEAD},	  {"POST", method::POST},
+			{"PUT", method::PUT},		  {"DELETE", method::DELETE}, {"CONNECT", method::CONNECT},
+			{"OPTIONS", method::OPTIONS}, {"TRACE", method::TRACE},	  {"PATCH", method::PATCH},
+		};
+
+		try {
+			req_method = methodMap.at(requestElements.method);
+		} catch (const std::exception &e) {
+			set_error(501, "The requested method '"s + requestElements.method + "' is not implemented by this server"s);
+		}
+
+		req = std::make_shared<request>(clientfd, req_method, requestElements.url);
+
+		try {
+			if (!requestListener(*req))
+				throw "Request failed: "s + std::string(std::strerror(errno));
+		} catch (const std::exception &err) {
+			dispatchInternalServerError(*req);
+		}
+	}
+
+	{ // close
+		if (close(clientfd) < 0) {
+			::http::error("close() returned: ", std::strerror(errno));
+			return;
+		}
+	}
+
+	::http::log(																	   // log message
+		requestElements.getHeader("X-Forwarded-For"), "/",							   // IP/
+		requestElements.getHeader("Cf-Ipcountry"), " ",								   // COUNTRY
+		requestElements.getHeader("Sec-Ch-Ua-Platform"), " ",						   // "PLATFORM"
+		requestElements.method, " ",												   // METHOD
+		requestElements.getHeader("Host"), " ",										   // HOST
+		requestElements.url, " ",													   // PATH
+		req->response().status(), " ",												   // CODE
+		(error.code ? error.message : (std::to_string(req->response().size()) + "b"s)) // SIZE or ERROR
+	);
 }
 
 } // namespace http
+
+std::string httpMethodToString(http::method method) {
+	switch (method) {
+		case http::method::GET:
+			return "GET";
+		case http::method::HEAD:
+			return "HEAD";
+		case http::method::POST:
+			return "POST";
+		case http::method::PUT:
+			return "PUT";
+		case http::method::DELETE:
+			return "DELETE";
+		case http::method::CONNECT:
+			return "CONNECT";
+		case http::method::OPTIONS:
+			return "OPTIONS";
+		case http::method::TRACE:
+			return "TRACE";
+		case http::method::PATCH:
+			return "PATCH";
+		case http::method::UNKNOWN:
+		default:
+			return "unknown";
+	}
+}
 
 std::string httpStatusCodeToString(int code) {
 	switch (code) {
