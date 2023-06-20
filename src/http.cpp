@@ -1,18 +1,18 @@
 #include "http.hpp"
 
+#include <iostream>
+#include <sstream>
+#include <stdexcept>
+#include <memory>
+#include <iomanip>
 #include <cerrno>
 #include <cstring>
 #include <string>
+#include <chrono>
 
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <unistd.h>
-
-#include <iostream>
-#include <sstream>
-#include <stdexcept>
-
-#include <memory>
 
 using namespace std::string_literals;
 
@@ -142,6 +142,8 @@ void server::listen(const host &host, uint16_t port, std::function<void()> succe
 void handleRequest(int clientfd, server::requestCallbackType requestListener,
 				   server::requestCallbackType dispatchInternalServerError) {
 
+	const auto startTime = std::chrono::high_resolution_clock::now();
+
 	std::string requestStr;
 	struct {
 		int code = 0;
@@ -184,6 +186,41 @@ void handleRequest(int clientfd, server::requestCallbackType requestListener,
 				return "_";
 			}
 		}
+
+		const std::string getPlatform() {
+			const std::string userAgent = getHeader("User-Agent");
+
+			for (const auto &[agent, platform] : std::unordered_map<std::string, std::string>({
+					 {"Windows NT 10.0", "Windows 10"},
+					 {"Windows NT 6.3", "Windows 8.1"},
+					 {"Windows NT 6.2", "Windows 8"},
+					 {"Windows NT 6.1", "Windows 7"},
+					 {"Windows NT 6.0", "Windows Vista"},
+					 {"Windows NT 5.2", "Windows Server 2003/XP x64"},
+					 {"Windows NT 5.1", "Windows XP"},
+					 {"Windows NT 5.01", "Windows 2000, Service Pack 1 (SP1)"},
+					 {"Windows NT 5.0", "Windows 2000"},
+					 {"Windows NT 4.0", "Windows NT 4.0"},
+					 {"Windows NT", "Windows NT"},
+				 })) {
+				if (userAgent.find(agent) != std::string::npos)
+					return platform;
+			}
+
+			for (const auto &platform : {
+					 "Windows",	   "iPhone",	  "iPad",	 "Macintosh", "Mac OS X",	   "Mac_PowerPC", "Mac_68K",
+					 "iOS",		   "Android",	  "FreeBSD", "OpenBSD",	  "NetBSD",		   "SunOS",		  "IRIX",
+					 "HP-UX",	   "AIX",		  "OS/2",	 "QNX",		  "BeOS",		   "AmigaOS",	  "MorphOS",
+					 "Nintendo",   "PlayStation", "Xbox",	 "Linux",	  "X11",		   "Chrome OS",	  "BlackBerry",
+					 "Symbian OS", "PalmOS",	  "WebOS",	 "Tizen",	  "Windows Phone", "Windows CE",
+				 }) {
+				if (userAgent.find(platform) != std::string::npos)
+					return platform;
+			}
+
+			return "_";
+		}
+
 	} requestElements;
 
 	{ // parse request
@@ -279,15 +316,52 @@ void handleRequest(int clientfd, server::requestCallbackType requestListener,
 		}
 	}
 
-	::http::log(																	   // log message
-		requestElements.getHeader("X-Forwarded-For"), "/",							   // IP/
-		requestElements.getHeader("Cf-Ipcountry"), " ",								   // COUNTRY
-		requestElements.getHeader("Sec-Ch-Ua-Platform"), " ",						   // "PLATFORM"
-		requestElements.method, " ",												   // METHOD
-		requestElements.getHeader("Host"), " ",										   // HOST
-		requestElements.url, " ",													   // PATH
-		req->response().status(), " ",												   // CODE
-		(error.code ? error.message : (std::to_string(req->response().size()) + "b"s)) // SIZE or ERROR
+	const auto endTime = std::chrono::high_resolution_clock::now();
+
+	const static auto formatSize = [](const size_t bytes) -> std::string {
+		const static size_t kilobyte = 1024;
+		const static size_t megabyte = 1024 * 1024;
+		const static size_t gigabyte = 1024 * 1024 * 1024;
+
+		if (bytes < kilobyte) {
+			return std::to_string(bytes) + "B";
+		} else if (bytes < megabyte) {
+			double sizeInKB = static_cast<double>(bytes) / kilobyte;
+			return std::to_string(sizeInKB) + "KB";
+		} else if (bytes < gigabyte) {
+			double sizeInMB = static_cast<double>(bytes) / megabyte;
+			return std::to_string(sizeInMB) + "MB";
+		} else {
+			double sizeInGB = static_cast<double>(bytes) / gigabyte;
+			return std::to_string(sizeInGB) + "GB";
+		}
+	};
+
+	const static auto executionTime = [&startTime, &endTime]() -> std::string {
+		const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
+		if (duration.count() < 1000) {
+			return std::to_string(duration.count()) + "ms"s;
+		} else if (duration.count() < 60000) {
+			auto seconds = std::chrono::duration_cast<std::chrono::seconds>(duration);
+			return std::to_string(seconds.count()) + "s"s;
+		} else {
+			auto minutes = std::chrono::duration_cast<std::chrono::minutes>(duration);
+			auto seconds = std::chrono::duration_cast<std::chrono::seconds>(duration - minutes);
+			return std::to_string(seconds.count()) + "min"s;
+		}
+	};
+
+	::http::log(														   // log message
+		requestElements.getHeader("X-Forwarded-For"), "/",				   // IP/
+		requestElements.getHeader("Cf-Ipcountry"), " ",					   // COUNTRY
+		std::quoted(requestElements.getPlatform()), " ",				   // "PLATFORM"
+		requestElements.method, " ",									   // METHOD
+		requestElements.getHeader("Host"), " ",							   // HOST
+		requestElements.url, " ",										   // PATH
+		req->response().status(), " ",									   // CODE
+		(error.code ? error.message : formatSize(req->response().size())), // SIZE or ERROR
+		":",															   //
+		executionTime()													   // EXECUTION TIME
 	);
 }
 
