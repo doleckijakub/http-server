@@ -6,13 +6,15 @@ CPPFLAGS :=
 CXXFLAGS := -Wall -Wextra -Wswitch-enum -pedantic -O2
 LDFLAGS :=
 
-build/example: example.cpp build/http.o
+SRCDIR ?= src
+
+build/example: $(SRCDIR)/example.cpp build/http.o
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -o build/example $^ $(LDFLAGS)
 
 build:
 	mkdir -p build
 
-build/%.o: %.cpp | build
+build/%.o: $(SRCDIR)/%.cpp | build
 	$(CXX) -c $(CXXFLAGS) $(CPPFLAGS) -o $@ $<
 
 .PHONY: clean
