@@ -17,6 +17,10 @@ build:
 build/%.o: $(SRCDIR)/%.cpp | build
 	$(CXX) -c $(CXXFLAGS) $(CPPFLAGS) -o $@ $<
 
+.PHONY: test
+test: build/example
+	./build/example 8080
+
 .PHONY: clean
 clean:
 	@FILES=$$(git clean -ndX); \
