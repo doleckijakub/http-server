@@ -4,7 +4,6 @@
 #include <chrono>
 #include <sstream>
 #include <memory>
-#include <iomanip> // just std::quoted TODO: perhaps delete
 
 // OS-SPECIFIC INCLUDES TODO: CHANGE WHEN IMPLEMENTING CROSS-PLATFORM SUPPORT
 #include <unistd.h>
@@ -307,7 +306,7 @@ static void handleRequest(int clientfd, server::requestCallbackType requestListe
 	::http::log(										   // log message
 		requestElements.getHeader("X-Forwarded-For"), "/", // IP/
 		requestElements.getHeader("Cf-Ipcountry"), " ",	   // COUNTRY
-		std::quoted(requestElements.getPlatform()), " ",   // "PLATFORM"
+		"(", requestElements.getPlatform(), ") ",		   // "PLATFORM"
 		requestElements.method, " ",					   // METHOD
 		requestElements.getHeader("Host"), " ",			   // HOST
 		requestElements.url, " ",						   // PATH
