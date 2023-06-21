@@ -1,6 +1,6 @@
 CXX ?= g++
 
-CPPFLAGS :=
+CPPFLAGS := -Isrc
 CXXFLAGS := -Wall -Wextra -Wswitch-enum -pedantic -O2
 LDFLAGS :=
 
@@ -32,8 +32,8 @@ example: example.cpp all
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -o $@ $< build/*.o $(LDFLAGS)
 
 .PHONY: test
-test: build/example
-	./build/example 8080
+test: example
+	./example 8080
 
 .PHONY: clean
 clean:
