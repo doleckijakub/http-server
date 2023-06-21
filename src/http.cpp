@@ -51,7 +51,18 @@ std::ostream &operator<<(std::ostream &out, const host &host) { return out << ho
 
 ip::ip(uint32_t full) : _full(full) {}
 
-url::url(std::string href) : _href(std::move(href)) {}
+// clang-format off
+url::url(std::string proto, std::string host, std::string uri)
+	: href(proto + "://"s + host + uri),
+	protocol(proto + ":"),
+	hostname(host),
+	origin(proto + "://"s + host),
+	pathname(),
+	path(),
+	search(),
+	searchparams(),
+	hash() {}
+// clang-format on
 
 request::request(int clientfd, ::http::method method, const ::http::url &url)
 	: method(method), url(url), _response(clientfd) {}
@@ -216,7 +227,7 @@ static void handleRequest(int clientfd, server::requestCallbackType requestListe
 		const std::string getPlatform() {
 			const std::string userAgent = getHeader("User-Agent");
 
-			for (const auto &[agent, platform] : std::unordered_map<std::string, std::string>({
+			for (const auto &[agent, platform] : std::vector<std::pair<std::string, std::string>>({
 					 {"Windows NT 10.0", "Windows 10"},
 					 {"Windows NT 6.3", "Windows 8.1"},
 					 {"Windows NT 6.2", "Windows 8"},
@@ -325,7 +336,9 @@ static void handleRequest(int clientfd, server::requestCallbackType requestListe
 			set_error(501, "The requested method '"s + requestElements.method + "' is not implemented by this server"s);
 		}
 
-		req = std::make_shared<request>(clientfd, req_method, requestElements.url);
+		url url(requestElements.getHeader("X-Forwarded-Proto"), requestElements.getHeader("Host"), requestElements.url);
+
+		req = std::make_shared<request>(clientfd, req_method, url);
 
 		if (error.code > 0) {
 			dispatchError(*req, error.code, error.message);
