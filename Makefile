@@ -28,7 +28,7 @@ build/server.o: $(SRCDIR)/server.cpp $(SRCDIR)/log.hpp build/request.o build/hos
 
 #
 
-build/example: $(SRCDIR)/example.cpp all
+example: example.cpp all
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -o $@ $< build/*.o $(LDFLAGS)
 
 .PHONY: test
