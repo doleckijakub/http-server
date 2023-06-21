@@ -7,7 +7,7 @@ bool requestListener(http::request &req) {
 	req.response().setStatus(200);
 	req.response().setContentType(http::content_type::TEXT_PLAIN);
 
-	req.response().setContentString("Hello, World!");
+	req.response().setContentString(req.url.href);
 	return req.response().send();
 }
 
