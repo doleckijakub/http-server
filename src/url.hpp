@@ -37,7 +37,7 @@ class url {
 	const std::vector<std::string> path; // TODO: create own class
 
 	const std::string search;
-	const std::unordered_map<std::string, std::string> searchparams; // TODO: create own class
+	const std::unordered_map<std::string, std::string> searchParams; // TODO: create own class
 
 }; // url
 
