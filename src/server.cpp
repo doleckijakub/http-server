@@ -70,11 +70,8 @@ void server::listen(const host &host, uint16_t port, std::function<void()> succe
 	sockaddr_storage clientaddr;
 	socklen_t clientsize = sizeof(clientaddr);
 
-	char clientip[INET_ADDRSTRLEN];
-
 	while (true) {
 		int clientfd = accept(_sockfd, (sockaddr *)&clientaddr, &clientsize);
-		inet_ntop(clientaddr.ss_family, (void *)&((sockaddr_in *)&clientaddr)->sin_addr, clientip, sizeof(clientip));
 		handleRequest(clientfd, _requestListener, _dispatchError);
 	}
 }
