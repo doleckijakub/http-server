@@ -10,6 +10,7 @@
 #include <arpa/inet.h>
 
 #include "log.hpp"
+#include "exception.hpp"
 
 template <typename T> T validate(T code) {
 	if (code < 0)
@@ -27,7 +28,8 @@ static void handleRequest(int clientfd, server::requestCallbackType requestListe
 std::unordered_map<server *, std::pair<host, uint16_t>> server::_instances;
 
 server::server(requestCallbackType requestListener, requestErrorCallbackType dispatchError)
-	: _requestListener(requestListener), _dispatchError(dispatchError) {}
+	: _requestListener(requestListener), _dispatchError(dispatchError) {
+}
 
 void server::stopAllInstances(int) {
 	std::putc('\n', stdout);
@@ -40,7 +42,9 @@ void server::stopAllInstances(int) {
 	std::exit(0);
 }
 
-bool server::stop() { return close(_sockfd) == 0; }
+bool server::stop() {
+	return close(_sockfd) == 0;
+}
 
 void server::listen(const host &host, uint16_t port, std::function<void()> successCallback,
 					std::function<void(const std::string &)> errorCallback) {
@@ -251,8 +255,12 @@ static void handleRequest(int clientfd, server::requestCallbackType requestListe
 		if (error.code > 0) {
 			dispatchError(*req, error.code, error.message);
 		} else if (error.code != -1) {
-			if (!requestListener(*req))
-				dispatchError(*req, 500, "Something went wrong");
+			try {
+				if (!requestListener(*req))
+					throw exception(500, "Something went wrong");
+			} catch (const exception &e) {
+				dispatchError(*req, e.code, e.message);
+			}
 		}
 	}
 
