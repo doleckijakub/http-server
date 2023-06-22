@@ -3,11 +3,46 @@
 
 #include "http.hpp"
 
+using namespace std::string_literals;
+
 bool requestListener(http::request &req) {
 	req.response().setStatus(200);
 	req.response().setContentType(http::content_type::TEXT_PLAIN);
 
-	req.response().setContentString(req.url.href);
+	std::string response;
+
+	response += "req.url.href: '"s + req.url.href + "'\n"s;
+	response += "req.url.protocol: '"s + req.url.protocol + "'\n"s;
+	response += "req.url.hostname: '"s + req.url.hostname + "'\n"s;
+	response += "req.url.origin: '"s + req.url.origin + "'\n"s;
+
+	response += "req.url.pathname: '"s + req.url.pathname + "'\n"s;
+
+	response += "req.url.path: ["s;
+	size_t path_size = req.url.path.size();
+	for (const auto &segment : req.url.path) {
+		response += "\n\t'"s + segment + "'";
+		if (--path_size)
+			response += ","s;
+	}
+	if (req.url.path.size())
+		response += "\n"s;
+	response += "]\n"s;
+
+	response += "req.url.search: '"s + req.url.search + "'\n"s;
+
+	response += "req.url.searchParams: {"s;
+	size_t searchParams_size = req.url.searchParams.size();
+	for (const auto &[key, value] : req.url.searchParams) {
+		response += "\n\t'"s + key + "':'"s + value + "'";
+		if (--searchParams_size)
+			response += ","s;
+	}
+	if (req.url.searchParams.size())
+		response += "\n"s;
+	response += "}\n"s;
+
+	req.response().setContentString(response);
 	return req.response().send();
 }
 
