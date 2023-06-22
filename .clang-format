@@ -7,3 +7,4 @@ TabWidth: 4
 IndentCaseLabels: true
 AllowShortLambdasOnASingleLine: false
 SortIncludes: false
+AllowShortFunctionsOnASingleLine: None
