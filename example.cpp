@@ -1,11 +1,16 @@
 #include <iostream>
 #include <csignal>
+#include <cstring>
 
 #include "http.hpp"
 
 using namespace std::string_literals;
 
 bool requestListener(http::request &req) {
+	if (req.url.path.size() == 1 && req.url.path[0] == "favicon.ico") {
+		return req.response().sendFile("favicon.ico");
+	}
+
 	req.response().setStatus(200);
 	req.response().setContentType(http::content_type::TEXT_PLAIN);
 
