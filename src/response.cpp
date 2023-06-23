@@ -1,7 +1,13 @@
 #include "response.hpp"
 
+#include <fstream>
+#include <sstream>
+
 // OS-SPECIFIC INCLUDES TODO: CHANGE WHEN IMPLEMENTING CROSS-PLATFORM SUPPORT
 #include <unistd.h>
+
+#include "exception.hpp"
+#include "log.hpp"
 
 std::string httpStatusCodeToString(int code);				  // forward-declaration
 std::string httpContentTypeToString(http::content_type type); // forward-declaration
@@ -10,21 +16,36 @@ using namespace std::string_literals;
 
 namespace http {
 
-response::response(int clientfd) : _clientfd(clientfd) {}
+response::response(int clientfd) : _clientfd(clientfd) {
+}
 
-response::~response() { send(); }
+response::~response() {
+	send();
+}
 
-int response::status() { return _status; }
+int response::status() {
+	return _status;
+}
 
-size_t response::size() { return _content.length(); }
+size_t response::size() {
+	return _content.length();
+}
 
-void response::setStatus(int status) { _status = status; }
+void response::setStatus(int status) {
+	_status = status;
+}
 
-void response::setHeader(const std::string &key, const std::string &value) { _headers[key] = value; }
+void response::setHeader(const std::string &key, const std::string &value) {
+	_headers[key] = value;
+}
 
-void response::setContentType(const http::content_type content_type) { _content_type = content_type; }
+void response::setContentType(const http::content_type content_type) {
+	_content_type = content_type;
+}
 
-void response::setContentString(const std::string &content) { _content = content; }
+void response::setContentString(const std::string &content) {
+	_content = content;
+}
 
 bool response::send() {
 	std::string res;
@@ -40,54 +61,274 @@ bool response::send() {
 	return write(_clientfd, res.data(), res.length()) >= 0;
 }
 
+content_type getContentType(const fs::path filepath) {
+	{ // check mime type
+		static std::unordered_map<std::string, content_type> mimeTypeToContentTypeMap({
+			{"text/html", content_type::TEXT_HTML},
+			{"text/css", content_type::TEXT_CSS},
+			{"text/javascript", content_type::TEXT_JAVASCRIPT},
+			{"application/octet-stream", content_type::APPLICATION_OCTET_STREAM},
+			{"application/ogg", content_type::APPLICATION_OGG},
+			{"application/pdf", content_type::APPLICATION_PDF},
+			{"application/xhtml+xml", content_type::APPLICATION_XHTML_XML},
+			{"application/x-shockwave-flash", content_type::APPLICATION_X_SHOCKWAVE_FLASH},
+			{"application/json", content_type::APPLICATION_JSON},
+			{"application/ld+json", content_type::APPLICATION_LD_JSON},
+			{"application/xml", content_type::APPLICATION_XML},
+			{"application/zip", content_type::APPLICATION_ZIP},
+			{"application/x-www-form-urlencoded", content_type::APPLICATION_X_WWW_FORM_URLENCODED},
+			{"audio/mpeg", content_type::AUDIO_MPEG},
+			{"audio/x-ms-wma", content_type::AUDIO_X_MS_WMA},
+			{"audio/vnd.rn-realaudio", content_type::AUDIO_VND_RN_REALAUDIO},
+			{"audio/x-wav", content_type::AUDIO_X_WAV},
+			{"image/gif", content_type::IMAGE_GIF},
+			{"image/jpeg", content_type::IMAGE_JPEG},
+			{"image/png", content_type::IMAGE_PNG},
+			{"image/tiff", content_type::IMAGE_TIFF},
+			{"image/vnd.microsoft.icon", content_type::IMAGE_VND_MICROSOFT_ICON},
+			{"image/x-icon", content_type::IMAGE_X_ICON},
+			{"image/vnd.djvu", content_type::IMAGE_VND_DJVU},
+			{"image/svg+xml", content_type::IMAGE_SVG_XML},
+			{"video/mpeg", content_type::VIDEO_MPEG},
+			{"video/mp4", content_type::VIDEO_MP4},
+			{"video/quicktime", content_type::VIDEO_QUICKTIME},
+			{"video/x-ms-wmv", content_type::VIDEO_X_MS_WMV},
+			{"video/x-msvideo", content_type::VIDEO_X_MSVIDEO},
+			{"video/x-flv", content_type::VIDEO_X_FLV},
+			{"video/webm", content_type::VIDEO_WEBM},
+		});
+
+		char buffer[256];
+		std::ostringstream command;
+		command << "file -b --mime-type " << filepath.string() << " 2>/dev/null";
+		std::string result;
+
+		FILE *pipe = popen(command.str().c_str(), "r");
+		if (pipe) {
+			while (!std::feof(pipe)) {
+				if (fgets(buffer, static_cast<int>(std::size(buffer)), pipe))
+					result += buffer;
+			}
+
+			pclose(pipe);
+		}
+
+		result.erase(result.find_last_not_of("\r\n") + 1);
+
+		if (mimeTypeToContentTypeMap.find(result) != mimeTypeToContentTypeMap.end()) {
+			const content_type type = mimeTypeToContentTypeMap.at(result);
+			::http::info("The content-type of ", filepath, " deduced from mime type: ", httpContentTypeToString(type));
+			return type;
+		}
+	}
+
+	{ // check file extension
+		static std::unordered_map<std::string, content_type> extensionToContentTypeMap({
+			{".jar", content_type::APPLICATION_JAVA_ARCHIVE},
+			{".x12", content_type::APPLICATION_EDI_X12},
+			{".edi", content_type::APPLICATION_EDIFACT},
+			{".js", content_type::APPLICATION_JAVASCRIPT},
+			{".bin", content_type::APPLICATION_OCTET_STREAM},
+			{".ogg", content_type::APPLICATION_OGG},
+			{".pdf", content_type::APPLICATION_PDF},
+			{".xhtml", content_type::APPLICATION_XHTML_XML},
+			{".swf", content_type::APPLICATION_X_SHOCKWAVE_FLASH},
+			{".json", content_type::APPLICATION_JSON},
+			{".jsonld", content_type::APPLICATION_LD_JSON},
+			{".xml", content_type::APPLICATION_XML},
+			{".zip", content_type::APPLICATION_ZIP},
+			{".form", content_type::APPLICATION_X_WWW_FORM_URLENCODED},
+			{".mp3", content_type::AUDIO_MPEG},
+			{".wma", content_type::AUDIO_X_MS_WMA},
+			{".ra", content_type::AUDIO_VND_RN_REALAUDIO},
+			{".wav", content_type::AUDIO_X_WAV},
+			{".gif", content_type::IMAGE_GIF},
+			{".jpeg", content_type::IMAGE_JPEG},
+			{".png", content_type::IMAGE_PNG},
+			{".tiff", content_type::IMAGE_TIFF},
+			{".ico", content_type::IMAGE_VND_MICROSOFT_ICON},
+			{".ico", content_type::IMAGE_X_ICON},
+			{".djvu", content_type::IMAGE_VND_DJVU},
+			{".svg", content_type::IMAGE_SVG_XML},
+			{".css", content_type::TEXT_CSS},
+			{".csv", content_type::TEXT_CSV},
+			{".html", content_type::TEXT_HTML},
+			{".js", content_type::TEXT_JAVASCRIPT},
+			{".txt", content_type::TEXT_PLAIN},
+			{".xml", content_type::TEXT_XML},
+			{".mpeg", content_type::VIDEO_MPEG},
+			{".mp4", content_type::VIDEO_MP4},
+			{".mov", content_type::VIDEO_QUICKTIME},
+			{".wmv", content_type::VIDEO_X_MS_WMV},
+			{".avi", content_type::VIDEO_X_MSVIDEO},
+			{".flv", content_type::VIDEO_X_FLV},
+			{".webm", content_type::VIDEO_WEBM},
+		});
+
+		const std::string extension = filepath.extension().string();
+
+		if (extensionToContentTypeMap.find(extension) != extensionToContentTypeMap.end()) {
+			const content_type type = extensionToContentTypeMap.at(extension);
+			::http::info("The content-type of ", filepath, " deduced from extension: ", httpContentTypeToString(type));
+			return type;
+		}
+	}
+
+	::http::warn("The content-type of ", filepath, " unknown, defaulting to application/octet-stream");
+	return content_type::APPLICATION_OCTET_STREAM;
+}
+
+std::string readFileContents(const fs::path &filepath) {
+	std::ifstream file(filepath.string(), std::ios::binary | std::ios::ate);
+	if (!file.good()) {
+		throw exception(500, "Internal server error");
+	}
+
+	auto fileSize = file.tellg();
+	file.seekg(0, std::ios::beg);
+
+	std::string buffer(fileSize, '\0');
+
+	if (!file.read(buffer.data(), fileSize)) {
+		throw exception(500, "Internal server error");
+	}
+
+	file.close();
+
+	return buffer;
+}
+
+bool response::sendFile(fs::path filepath, const http::content_type content_type) {
+	try {
+		if (fs::exists(filepath)) {
+			if (fs::is_directory(filepath)) {
+				filepath /= "index.html";
+			}
+
+			if (fs::exists(filepath)) {
+				std::string buffer = readFileContents(filepath);
+
+				setStatus(200);
+				setContentType(content_type);
+				setContentString(buffer);
+				return send();
+			}
+		}
+	} catch (const std::exception &error) {
+		throw exception(500, "Internal server error");
+	}
+
+	throw exception(404, "Resource "s + filepath.string() + " not found"s);
+}
+
+bool response::sendFile(fs::path filepath) {
+	try {
+		if (fs::exists(filepath)) {
+			if (fs::is_directory(filepath)) {
+				filepath /= "index.html";
+			}
+
+			if (fs::exists(filepath)) {
+				std::string buffer = readFileContents(filepath);
+
+				setStatus(200);
+				setContentType(getContentType(filepath));
+				setContentString(buffer);
+				return send();
+			}
+		}
+	} catch (const std::exception &error) {
+		throw exception(500, "Internal server error");
+	}
+
+	throw exception(404, "Resource "s + filepath.string() + " not found"s);
+}
+
 } // namespace http
 
 std::string httpContentTypeToString(http::content_type type) { // TODO: move to content_type.cpp
 	switch (type) {
-		// case http::content_type::APPLICATION_JAVA_ARCHIVE: return "application/java-archive";
-		// case http::content_type::APPLICATION_EDI_X12: return "application/EDI_X12";
-		// case http::content_type::APPLICATION_EDIFACT: return "application/EDIFACT";
-		// case http::content_type::APPLICATION_JAVASCRIPT: return "application/javascript";
-		// case http::content_type::APPLICATION_OCTET_STREAM: return "application/octet-stream";
-		// case http::content_type::APPLICATION_OGG: return "application/ogg";
-		// case http::content_type::APPLICATION_PDF: return "application/pdf";
-		// case http::content_type::APPLICATION_XHTML_XML: return "application/xhtml+xml";
-		// case http::content_type::APPLICATION_X_SHOCKWAVE_FLASH: return "application/x-shockwave-flash";
-		// case http::content_type::APPLICATION_JSON: return "application/json";
-		// case http::content_type::APPLICATION_LD_JSON: return "application/ld+json";
-		// case http::content_type::APPLICATION_XML: return "application/xml";
-		// case http::content_type::APPLICATION_ZIP: return "application/zip";
-		// case http::content_type::APPLICATION_X_WWW_FORM_URLENCODED: return "application/x-www-form-urlencoded";
-		// case http::content_type::AUDIO_MPEG: return "audio/mpeg";
-		// case http::content_type::AUDIO_X_MS_WMA: return "audio/x-ms-wma";
-		// case http::content_type::AUDIO_VND_RN_REALAUDIO: return "audio/vnd.rn-realaudio";
-		// case http::content_type::AUDIO_X_WAV: return "audio/x-wav";
-		// case http::content_type::IMAGE_GIF: return "image/gif";
-		// case http::content_type::IMAGE_JPEG: return "image/jpeg";
-		// case http::content_type::IMAGE_PNG: return "image/png";
-		// case http::content_type::IMAGE_TIFF: return "image/tiff";
-		// case http::content_type::IMAGE_VND_MICROSOFT_ICON: return "image/vnd.microsoft.icon";
-		// case http::content_type::IMAGE_X_ICON: return "image/x-icon";
-		// case http::content_type::IMAGE_VND_DJVU: return "image/vnd.djvu";
-		// case http::content_type::IMAGE_SVG_XML: return "image/svg+xml";
-		// case http::content_type::TEXT_CSS: return "text/css";
-		// case http::content_type::TEXT_CSV: return "text/csv";
+		case http::content_type::APPLICATION_JAVA_ARCHIVE:
+			return "application/java-archive";
+		case http::content_type::APPLICATION_EDI_X12:
+			return "application/EDI_X12";
+		case http::content_type::APPLICATION_EDIFACT:
+			return "application/EDIFACT";
+		case http::content_type::APPLICATION_JAVASCRIPT:
+			return "application/javascript";
+		case http::content_type::APPLICATION_OCTET_STREAM:
+			return "application/octet-stream";
+		case http::content_type::APPLICATION_OGG:
+			return "application/ogg";
+		case http::content_type::APPLICATION_PDF:
+			return "application/pdf";
+		case http::content_type::APPLICATION_XHTML_XML:
+			return "application/xhtml+xml";
+		case http::content_type::APPLICATION_X_SHOCKWAVE_FLASH:
+			return "application/x-shockwave-flash";
+		case http::content_type::APPLICATION_JSON:
+			return "application/json";
+		case http::content_type::APPLICATION_LD_JSON:
+			return "application/ld+json";
+		case http::content_type::APPLICATION_XML:
+			return "application/xml";
+		case http::content_type::APPLICATION_ZIP:
+			return "application/zip";
+		case http::content_type::APPLICATION_X_WWW_FORM_URLENCODED:
+			return "application/x-www-form-urlencoded";
+		case http::content_type::AUDIO_MPEG:
+			return "audio/mpeg";
+		case http::content_type::AUDIO_X_MS_WMA:
+			return "audio/x-ms-wma";
+		case http::content_type::AUDIO_VND_RN_REALAUDIO:
+			return "audio/vnd.rn-realaudio";
+		case http::content_type::AUDIO_X_WAV:
+			return "audio/x-wav";
+		case http::content_type::IMAGE_GIF:
+			return "image/gif";
+		case http::content_type::IMAGE_JPEG:
+			return "image/jpeg";
+		case http::content_type::IMAGE_PNG:
+			return "image/png";
+		case http::content_type::IMAGE_TIFF:
+			return "image/tiff";
+		case http::content_type::IMAGE_VND_MICROSOFT_ICON:
+			return "image/vnd.microsoft.icon";
+		case http::content_type::IMAGE_X_ICON:
+			return "image/x-icon";
+		case http::content_type::IMAGE_VND_DJVU:
+			return "image/vnd.djvu";
+		case http::content_type::IMAGE_SVG_XML:
+			return "image/svg+xml";
+		case http::content_type::TEXT_CSS:
+			return "text/css";
+		case http::content_type::TEXT_CSV:
+			return "text/csv";
 		case http::content_type::TEXT_HTML:
 			return "text/html";
-		// case http::content_type::TEXT_JAVASCRIPT: return "text/javascript";
+		case http::content_type::TEXT_JAVASCRIPT:
+			return "text/javascript";
 		case http::content_type::TEXT_PLAIN:
 			return "text/plain";
-			// case http::content_type::TEXT_XML: return "text/xml";
-			// case http::content_type::VIDEO_MPEG: return "video/mpeg";
-			// case http::content_type::VIDEO_MP4: return "video/mp4";
-			// case http::content_type::VIDEO_QUICKTIME: return "video/quicktime";
-			// case http::content_type::VIDEO_X_MS_WMV: return "video/x-ms-wmv";
-			// case http::content_type::VIDEO_X_MSVIDEO: return "video/x-msvideo";
-			// case http::content_type::VIDEO_X_FLV: return "video/x-flv";
-			// case http::content_type::VIDEO_WEBM: return "video/webm";
+		case http::content_type::TEXT_XML:
+			return "text/xml";
+		case http::content_type::VIDEO_MPEG:
+			return "video/mpeg";
+		case http::content_type::VIDEO_MP4:
+			return "video/mp4";
+		case http::content_type::VIDEO_QUICKTIME:
+			return "video/quicktime";
+		case http::content_type::VIDEO_X_MS_WMV:
+			return "video/x-ms-wmv";
+		case http::content_type::VIDEO_X_MSVIDEO:
+			return "video/x-msvideo";
+		case http::content_type::VIDEO_X_FLV:
+			return "video/x-flv";
+		case http::content_type::VIDEO_WEBM:
+			return "video/webm";
 	}
 
-	throw "Undexpected content type: "s + std::to_string((int)type);
+	throw http::exception(500, "Something went wrong");
 }
 
 std::string httpStatusCodeToString(int code) {
@@ -286,5 +527,5 @@ std::string httpStatusCodeToString(int code) {
 			return "599 Network Connect Timeout Error";
 	}
 
-	throw "Undexpected response status code: "s + std::to_string(code);
+	return std::to_string(code);
 }

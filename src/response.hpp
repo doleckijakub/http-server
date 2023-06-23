@@ -2,10 +2,13 @@
 
 #include <string>
 #include <unordered_map>
+#include <filesystem>
 
 #include "content_type.hpp"
 
 namespace http {
+
+namespace fs = std::filesystem;
 
 class response {
   public:
@@ -13,6 +16,11 @@ class response {
 	void setHeader(const std::string &key, const std::string &value);
 	void setContentType(const http::content_type content_type);
 	void setContentString(const std::string &content);
+
+	bool sendFile(fs::path filepath, const http::content_type content_type);
+	bool sendFile(fs::path filepath); // content type deduced from mime-type or extension,
+									  // otherwise defaulted to application/octet-stream
+
 	bool send();
 
 	~response();

@@ -14,7 +14,7 @@ build:
 build/%.o: $(SRCDIR)/%.cpp | build
 	$(CXX) -c $(CXXFLAGS) $(CPPFLAGS) -o $@ $<
 
-build/response.o: $(SRCDIR)/response.cpp $(SRCDIR)/content_type.hpp
+build/response.o: $(SRCDIR)/response.cpp $(SRCDIR)/log.hpp $(SRCDIR)/content_type.hpp
 	$(CXX) -c $(CXXFLAGS) $(CPPFLAGS) -o $@ $<
 
 build/request.o: $(SRCDIR)/request.cpp $(SRCDIR)/method.hpp build/url.o build/response.o
