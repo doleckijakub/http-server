@@ -17,9 +17,10 @@ class response {
 	void setContentType(const http::content_type content_type);
 	void setContentString(const std::string &content);
 
-	bool sendFile(fs::path filepath, const http::content_type content_type);
-	bool sendFile(fs::path filepath); // content type deduced from mime-type or extension,
-									  // otherwise defaulted to application/octet-stream
+	bool sendFile(fs::path filepath, const http::content_type content_type, const std::string displayPath);
+	bool sendFile(fs::path filepath,
+				  const std::string displayPath); // content type deduced from mime-type or extension,
+												  // otherwise defaulted to application/octet-stream
 
 	bool send();
 

@@ -198,7 +198,7 @@ std::string readFileContents(const fs::path &filepath) {
 	return buffer;
 }
 
-bool response::sendFile(fs::path filepath, const http::content_type content_type) {
+bool response::sendFile(fs::path filepath, const http::content_type content_type, const std::string displayPath) {
 	try {
 		if (fs::exists(filepath)) {
 			if (fs::is_directory(filepath)) {
@@ -218,10 +218,10 @@ bool response::sendFile(fs::path filepath, const http::content_type content_type
 		throw exception(500, "Internal server error");
 	}
 
-	throw exception(404, "Resource "s + filepath.string() + " not found"s);
+	throw exception(404, "Resource "s + displayPath + " not found"s);
 }
 
-bool response::sendFile(fs::path filepath) {
+bool response::sendFile(fs::path filepath, const std::string displayPath) {
 	try {
 		if (fs::exists(filepath)) {
 			if (fs::is_directory(filepath)) {
@@ -241,7 +241,7 @@ bool response::sendFile(fs::path filepath) {
 		throw exception(500, "Internal server error");
 	}
 
-	throw exception(404, "Resource "s + filepath.string() + " not found"s);
+	throw exception(404, "Resource "s + displayPath + " not found"s);
 }
 
 } // namespace http
