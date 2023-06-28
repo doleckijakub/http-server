@@ -1,5 +1,13 @@
 #include "response.hpp"
 
+namespace std {
+template <> struct hash<filesystem::path> {
+	size_t operator()(const filesystem::path &p) const {
+		return hash<filesystem::path::string_type>{}(p.native());
+	}
+};
+} // namespace std
+
 #include <fstream>
 #include <sstream>
 
@@ -62,6 +70,19 @@ bool response::send() {
 }
 
 content_type getContentType(const fs::path filepath) {
+	static std::unordered_map<fs::path, std::pair<std::filesystem::file_time_type, content_type>> cache;
+
+	{ // if the file exists in cache and was not written to since it was put there, return cached type
+		auto it = cache.find(filepath);
+		if (it != cache.end()) {
+			if (it->second.first == fs::last_write_time(filepath)) {
+				return it->second.second;
+			} else {
+				cache.erase(it);
+			}
+		}
+	}
+
 	{ // check mime type
 		static std::unordered_map<std::string, content_type> mimeTypeToContentTypeMap({
 			{"text/html", content_type::TEXT_HTML},
@@ -117,6 +138,7 @@ content_type getContentType(const fs::path filepath) {
 
 		if (mimeTypeToContentTypeMap.find(result) != mimeTypeToContentTypeMap.end()) {
 			const content_type type = mimeTypeToContentTypeMap.at(result);
+			cache.insert_or_assign(filepath, std::make_pair(fs::last_write_time(filepath), type));
 			::http::info("The content-type of ", filepath, " deduced from mime type: ", httpContentTypeToString(type));
 			return type;
 		}
@@ -169,6 +191,7 @@ content_type getContentType(const fs::path filepath) {
 
 		if (extensionToContentTypeMap.find(extension) != extensionToContentTypeMap.end()) {
 			const content_type type = extensionToContentTypeMap.at(extension);
+			cache.insert_or_assign(filepath, std::make_pair(fs::last_write_time(filepath), type));
 			::http::info("The content-type of ", filepath, " deduced from extension: ", httpContentTypeToString(type));
 			return type;
 		}
