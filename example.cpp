@@ -8,13 +8,15 @@ using namespace std::string_literals;
 
 bool requestListener(http::request &req) {
 	if (req.url.path.size() == 1 && req.url.path[0] == "favicon.ico") {
-		return req.response().sendFile("favicon.ico");
+		return req.response().sendFile("favicon.ico", "favicon.ico");
 	}
 
 	req.response().setStatus(200);
 	req.response().setContentType(http::content_type::TEXT_PLAIN);
 
 	std::string response;
+
+	response += "User-Agent: '"s + req.getHeader("User-Agent") + "'\n"s;
 
 	response += "req.url.href: '"s + req.url.href + "'\n"s;
 	response += "req.url.protocol: '"s + req.url.protocol + "'\n"s;

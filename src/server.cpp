@@ -247,7 +247,7 @@ static void handleRequest(int clientfd, server::requestCallbackType requestListe
 
 		url url(requestElements.getHeader("X-Forwarded-Proto"), requestElements.getHeader("Host"), requestElements.url);
 
-		req = std::make_shared<request>(clientfd, req_method, url);
+		req = std::make_shared<request>(clientfd, req_method, url, requestElements.headers, requestElements.payload);
 
 		if (error.code > 0) {
 			dispatchError(*req, error.code, error.message);
