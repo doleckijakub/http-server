@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <ostream>
+#include <cstdint>
 
 namespace http {
 
