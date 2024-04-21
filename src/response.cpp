@@ -1,13 +1,5 @@
 #include "response.hpp"
 
-namespace std {
-template <> struct hash<filesystem::path> {
-	size_t operator()(const filesystem::path &p) const {
-		return hash<filesystem::path::string_type>{}(p.native());
-	}
-};
-} // namespace std
-
 #include <fstream>
 #include <sstream>
 
