@@ -6,10 +6,13 @@ LDFLAGS :=
 
 SRCDIR ?= src
 
-all: build/exception.o build/ip.o build/url.o build/response.o build/request.o build/host.o build/server.o | build
+all: build/http-server.a
 
 build:
 	mkdir -p build
+
+build/http-server.a: build/exception.o build/ip.o build/url.o build/response.o build/request.o build/host.o build/server.o | build
+	ar rcs $@ $^
 
 build/%.o: $(SRCDIR)/%.cpp | build
 	$(CXX) -c $(CXXFLAGS) $(CPPFLAGS) -o $@ $<
@@ -28,8 +31,8 @@ build/server.o: $(SRCDIR)/server.cpp $(SRCDIR)/log.hpp build/request.o build/hos
 
 #
 
-example: example.cpp all
-	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -o $@ $< build/*.o $(LDFLAGS)
+example: example.cpp build/http-server.a
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -o $@ $^ $(LDFLAGS)
 
 .PHONY: test
 test: example
